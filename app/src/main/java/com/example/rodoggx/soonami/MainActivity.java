@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.text.SimpleDateFormat;
+
 import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -63,6 +64,85 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private URL createUrl(String stringUrl) {
+        URL url = null;
+        try {
+            url = new URL(stringUrl);
+        } catch (MalformedURLException e) {
+            Log.e(Log_TAG, "createUrl: ", e);
+        }
+        return url;
+    }
+
+    private String makeHttpRequest(URL url) throws IOException {
+        String jsonResponse = "";
+        if (url == null) {
+            return jsonResponse;
+        }
+
+        HttpURLConnection urlConn = null;
+        InputStream inputStream = null;
+        try {
+            urlConn = (HttpURLConnection) url.openConnection();
+            urlConn.setRequestMethod("GET");
+            urlConn.setReadTimeout(10000);
+            urlConn.setConnectTimeout(15000);
+            urlConn.connect();
+            if (urlConn.getResponseCode() == 200) {
+                inputStream = urlConn.getInputStream();
+                jsonResponse = readFromStream(inputStream);
+            }
+        } catch (IOException e) {
+            Log.e(Log_TAG, "makeHttpRequest: ", e);
+        } finally {
+            if (urlConn != null) {
+                urlConn.disconnect();
+            }
+            if (inputStream != null) {
+                inputStream.close();
+            }
+        }
+        return jsonResponse;
+    }
+
+    private String readFromStream(InputStream inputStream) throws IOException {
+        StringBuilder output = new StringBuilder();
+        if (inputStream != null) {
+            InputStreamReader inputReader = new InputStreamReader(inputStream, Charset.forName("UTF-8"));
+            BufferedReader reader = new BufferedReader(inputReader);
+            String line = reader.readLine();
+            while (line != null) {
+                output.append(line);
+                line = reader.readLine();
+            }
+        }
+        return output.toString();
+    }
+
+    private Event extractFeatureFromJson(String jsonResponse) {
+        if (TextUtils.isEmpty(jsonResponse)) {
+            return null;
+        }
+        try {
+            JSONObject baseJsonResponse = new JSONObject(jsonResponse);
+            JSONArray featureArray = baseJsonResponse.getJSONArray("features");
+
+            if (featureArray.length() > 0) {
+                JSONObject firstFeature = featureArray.getJSONObject(0);
+                JSONObject properties = firstFeature.getJSONObject("properties");
+
+                String title = properties.getString("title");
+                long time = properties.getLong("time");
+                int tsunamiAlert = properties.getInt("tsunami");
+
+                return new Event(title, time, tsunamiAlert);
+            }
+        } catch (JSONException e) {
+            Log.e(Log_TAG, "extractFeatureFromJson: ", e);
+        }
+        return null;
+    }
+
     private class TsunamiAsyncTask extends AsyncTask<URL, Void, Event> {
         @Override
         protected Event doInBackground(URL... urls) {
@@ -83,86 +163,6 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             updateUi(earthquake);
-        }
-
-        private URL createUrl(String stringUrl) {
-            URL url = null;
-            try {
-                url = new URL(stringUrl);
-            } catch (MalformedURLException e) {
-                Log.e(Log_TAG, "createUrl: ", e);
-                return null;
-            }
-            return url;
-        }
-
-        private String makeHttpRequest(URL url) throws IOException {
-            String jsonResponse = "";
-            if (url == null) {
-                return jsonResponse;
-            }
-
-            HttpURLConnection urlConn = null;
-            InputStream inputStream = null;
-            try {
-                urlConn = (HttpURLConnection) url.openConnection();
-                urlConn.setRequestMethod("GET");
-                urlConn.setReadTimeout(10000);
-                urlConn.setConnectTimeout(15000);
-                urlConn.connect();
-                if (urlConn.getResponseCode() == 200) {
-                    inputStream = urlConn.getInputStream();
-                    jsonResponse = readFromStream(inputStream);
-                }
-            } catch (IOException e) {
-                Log.e(Log_TAG, "makeHttpRequest: ", e);
-            } finally {
-                if (urlConn != null) {
-                    urlConn.disconnect();
-                }
-                if (inputStream != null) {
-                    inputStream.close();
-                }
-            }
-            return jsonResponse;
-        }
-
-        private String readFromStream(InputStream inputStream) throws IOException {
-            StringBuilder output = new StringBuilder();
-            if (inputStream != null) {
-                InputStreamReader inputReader = new InputStreamReader(inputStream, Charset.forName("UTF-8"));
-                BufferedReader reader = new BufferedReader(inputReader);
-                String line = reader.readLine();
-                while (line != null) {
-                    output.append(line);
-                    line = reader.readLine();
-                }
-            }
-            return output.toString();
-        }
-
-        private Event extractFeatureFromJson(String jsonResponse) {
-            if (TextUtils.isEmpty(jsonResponse)) {
-                return null;
-            }
-            try {
-                JSONObject baseJsonResponse = new JSONObject(jsonResponse);
-                JSONArray featureArray = baseJsonResponse.getJSONArray("features");
-
-                if (featureArray.length() > 0) {
-                    JSONObject firstFeature = featureArray.getJSONObject(0);
-                    JSONObject properties = firstFeature.getJSONObject("properties");
-
-                    String title = properties.getString("title");
-                    long time = properties.getLong("time");
-                    int tsunamiAlert = properties.getInt("tsunami");
-
-                    return new Event(title, time, tsunamiAlert);
-                }
-            } catch (JSONException e) {
-                Log.e(Log_TAG, "extractFeatureFromJson: ", e);
-            }
-            return null;
         }
     }
 }
